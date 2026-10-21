@@ -42,6 +42,7 @@ public:
     tf2::Stamped<tf2::Transform> lidar2Baselink;
 
     double lidarOdomTime = -1;
+    rclcpp::Time lidarOdomTimeROS;
     deque<nav_msgs::msg::Odometry> imuOdomQueue;
 
     TransformFusion(const rclcpp::NodeOptions & options) : ParamServer("liorf_transformFusion", options)
@@ -54,14 +55,21 @@ public:
 
         if(lidarFrame != baselinkFrame)
         {
-            try
+            int nb_try_left = 1000;
+            while(nb_try_left>0)
             {
-                tf2::fromMsg(tfBuffer->lookupTransform(
-                    lidarFrame, baselinkFrame, rclcpp::Time(0)), lidar2Baselink);
-            }
-            catch (tf2::TransformException ex)
-            {
-                RCLCPP_ERROR(get_logger(), "%s", ex.what());
+                try
+                {
+                    tf2::fromMsg(tfBuffer->lookupTransform(
+                        lidarFrame, baselinkFrame, tf2::TimePointZero, 150ms), lidar2Baselink);
+                    break;
+                }
+                catch (tf2::TransformException ex)
+                {
+                    RCLCPP_ERROR(get_logger(), "%s", ex.what());
+                    nb_try_left--;
+                    RCLCPP_INFO(get_logger(), "%i", nb_try_left);
+                }
             }
         }
 
@@ -93,6 +101,7 @@ public:
         lidarOdomAffine = odom2affine(*odomMsg);
 
         lidarOdomTime = ROS_TIME(odomMsg->header.stamp);
+        lidarOdomTimeROS = odomMsg->header.stamp;
     }
 
     void imuOdometryHandler(const nav_msgs::msg::Odometry::SharedPtr odomMsg)
@@ -101,7 +110,7 @@ public:
         tf2::Quaternion quat_tf;
         // quat_tf.setRPY(0, 0, 0);
         // tf2::Transform map_to_odom = tf2::Transform(quat_tf, tf2::Vector3(0, 0, 0));
-        rclcpp::Time t(static_cast<uint32_t>(lidarOdomTime * 1e9));
+        rclcpp::Time t(static_cast<uint64_t>(lidarOdomTime * 1e9));
         tf2::TimePoint time_point = tf2_ros::fromRclcpp(t);
         // tf2::Stamped<tf2::Transform> temp_map_to_odom(map_to_odom, time_point, mapFrame);
         // geometry_msgs::msg::TransformStamped trans_map_to_odom;
@@ -147,10 +156,14 @@ public:
         if(lidarFrame != baselinkFrame)
             tCur *= lidar2Baselink;
 
+        // RCLCPP_INFO(get_logger(), "Publishing odom ->base link, tf2 time point : %i", time_point);
         tf2::Stamped<tf2::Transform> temp_odom_to_base(tCur, time_point, odometryFrame);
         geometry_msgs::msg::TransformStamped trans_odom_to_base_link;
         tf2::convert(temp_odom_to_base, trans_odom_to_base_link);
         trans_odom_to_base_link.child_frame_id = baselinkFrame;
+        trans_odom_to_base_link.header.stamp = lidarOdomTimeROS;
+        // RCLCPP_INFO(get_logger(), "Publishing odom ->base link, stamp_i : %i", trans_odom_to_base_link.header.stamp);
+        // RCLCPP_INFO(get_logger(), "Publishing odom ->base link, stamp_f : %f", trans_odom_to_base_link.header.stamp);
         tfOdom2BaseLink->sendTransform(trans_odom_to_base_link);
 
         // publish IMU path
