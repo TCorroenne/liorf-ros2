@@ -37,8 +37,8 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <tf2_eigen/tf2_eigen.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
  
 #include <vector>
 #include <cmath>
@@ -159,7 +159,7 @@ public:
     {   
         declare_parameter<string>("history_policy", "history_keep_last");
         get_parameter("history_policy", history_policy);
-        declare_parameter<string>("reliability_policy", "reliability_reliable");
+        declare_parameter<string>("reliability_policy", "reliability_best_effort");
         get_parameter("reliability_policy", reliability_policy);
 
         declare_parameter<string>("pointCloudTopic", "/points_raw");
